@@ -1,0 +1,8 @@
+Information Security Guidelines:
+Do not share passwords or confidential data with anyone.
+
+VPN Usage:
+Use the company VPN for remote access.
+
+Security Reporting:
+Report suspicious emails or activity immediately to security@company.example.
