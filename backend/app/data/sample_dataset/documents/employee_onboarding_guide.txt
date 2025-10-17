@@ -1,0 +1,27 @@
+EMPLOYEE ONBOARDING GUIDE
+
+Welcome to Company XYZ! This guide helps new hires complete onboarding smoothly.
+
+Pre-Onboarding:
+- Complete personal details and upload ID proofs in the onboarding portal.
+- Read the Employee Handbook and sign the acknowledgement form.
+
+Day 1:
+- Orientation session with HR and manager.
+- IT provisioning: laptop, email, VPN access.
+- Mandatory trainings: Code of Conduct, Data Privacy, and Security Awareness.
+
+First Week:
+- Meet your team; set initial 30-60-90 day goals.
+- Complete required compliance courses and benefits enrolment.
+- Setup accounts for internal tools (HR portal, ticketing, documentation).
+
+First 90 Days:
+- Bi-weekly check-ins with manager.
+- Mentor assigned for role-specific queries.
+- Performance goals evaluated at 90-day milestone.
+
+Helpful Contacts:
+- HR: hr@companyxyz.com
+- IT Support: it-helpdesk@companyxyz.com
+- Finance: finance@companyxyz.com

@@ -1,0 +1,20 @@
+FINANCE: SALARY, PAYROLL & REIMBURSEMENTS
+
+Payroll Cycle:
+- Salaries are processed monthly and credited on the last working day.
+- Payroll runs include tax calculation, statutory contributions, and benefit deductions.
+
+Payslips:
+- Payslips are published in the Employee Portal within payroll day.
+- For payroll discrepancies, raise a query via finance@companyxyz.com within 15 days.
+
+Reimbursements:
+- Submit expense claims with receipts in the Finance Portal under 'Expenses'.
+- Attach digital receipts and select category (Travel, Food, Training, Stationery).
+- Approval flow: Manager -> Finance -> Payments. Typical processing 7–10 business days.
+
+Advances:
+- Salary advances considered in exceptional cases; approval needed from Finance Head.
+
+Tax Documents:
+- Annual tax forms (e.g., Form 16) issued by HR/Finance during tax season.

@@ -1,0 +1,24 @@
+IT SUPPORT SOP - COMPANY XYZ
+
+Purpose:
+To define standard procedures for handling IT incidents, requests, and asset management.
+
+Ticketing:
+- All IT issues must be logged via the IT ticketing portal or sent to it-helpdesk@companyxyz.com.
+- Ticket priorities: P1 (Critical), P2 (High), P3 (Medium), P4 (Low).
+- SLA: P1 resolved within 4 hours, P2 within 24 hours, others within 3 business days.
+
+Passwords & Authentication:
+- Use corporate SSO; enable MFA for all privileged accounts.
+- Password resets can be self-served through the portal or via IT, validated with employee ID.
+
+Hardware Requests:
+- New hardware requires manager approval and budget sign-off.
+- Asset inventory maintained centrally; employees must return devices on exit.
+
+Security Incidents:
+- Report suspected breaches to security@companyxyz.com immediately.
+- Incident response team coordinates rapid containment, eradication, and recovery.
+
+Remote Access:
+- VPN access is provisioned after manager approval and security training.

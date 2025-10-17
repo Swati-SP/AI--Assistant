@@ -1,0 +1,27 @@
+[
+  {
+    "username": "lachika",
+    "role": "Manager",
+    "email": "lachika@companyxyz.com"
+  },
+  {
+    "username": "swati",
+    "role": "Employee",
+    "email": "swati@companyxyz.com"
+  },
+  {
+    "username": "raj",
+    "role": "Employee",
+    "email": "raj@companyxyz.com"
+  },
+  {
+    "username": "anita",
+    "role": "Finance",
+    "email": "anita@companyxyz.com"
+  },
+  {
+    "username": "vikram",
+    "role": "IT",
+    "email": "vikram@companyxyz.com"
+  }
+]

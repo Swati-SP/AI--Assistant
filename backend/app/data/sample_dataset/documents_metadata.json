@@ -1,0 +1,79 @@
+[
+  {
+    "title": "Hr Policy Full",
+    "filename": "hr_policy_full.txt",
+    "uploader": "lachika",
+    "domain": "HR",
+    "summary": "HR POLICY - COMPANY XYZ"
+  },
+  {
+    "title": "Employee Onboarding Guide",
+    "filename": "employee_onboarding_guide.txt",
+    "uploader": "lachika",
+    "domain": "HR",
+    "summary": "EMPLOYEE ONBOARDING GUIDE"
+  },
+  {
+    "title": "Leave Policy Detailed",
+    "filename": "leave_policy_detailed.txt",
+    "uploader": "lachika",
+    "domain": "HR",
+    "summary": "LEAVE POLICY & PROCEDURES"
+  },
+  {
+    "title": "It Support Standard Operating Procedure",
+    "filename": "it_support_standard_operating_procedure.txt",
+    "uploader": "lachika",
+    "domain": "IT",
+    "summary": "IT SUPPORT SOP - COMPANY XYZ"
+  },
+  {
+    "title": "Finance Salary And Payroll",
+    "filename": "finance_salary_and_payroll.txt",
+    "uploader": "lachika",
+    "domain": "Finance",
+    "summary": "FINANCE: SALARY, PAYROLL & REIMBURSEMENTS"
+  },
+  {
+    "title": "Travel And Expense Policy",
+    "filename": "travel_and_expense_policy.txt",
+    "uploader": "lachika",
+    "domain": "Finance",
+    "summary": "TRAVEL & EXPENSE POLICY"
+  },
+  {
+    "title": "Data Privacy And Security Policy",
+    "filename": "data_privacy_and_security_policy.txt",
+    "uploader": "lachika",
+    "domain": "IT",
+    "summary": "DATA PRIVACY & SECURITY POLICY"
+  },
+  {
+    "title": "Benefits And Compensation",
+    "filename": "benefits_and_compensation.txt",
+    "uploader": "lachika",
+    "domain": "IT",
+    "summary": "BENEFITS & COMPENSATION OVERVIEW"
+  },
+  {
+    "title": "Compliance And Legal Guidelines",
+    "filename": "compliance_and_legal_guidelines.txt",
+    "uploader": "lachika",
+    "domain": "Legal",
+    "summary": "COMPLIANCE & LEGAL GUIDELINES"
+  },
+  {
+    "title": "Manager Operations Handbook",
+    "filename": "manager_operations_handbook.txt",
+    "uploader": "lachika",
+    "domain": "HR",
+    "summary": "MANAGER OPERATIONS HANDBOOK"
+  },
+  {
+    "title": "Faq Extended",
+    "filename": "faq_extended.txt",
+    "uploader": "lachika",
+    "domain": "General",
+    "summary": "FREQUENTLY ASKED QUESTIONS (Extended)"
+  }
+]

@@ -1,8 +1,0 @@
-IT Onboarding and Access:
-New employees receive login credentials and workstation setup on Day 1.
-
-Password Reset:
-Use the 'Forgot Password' option on the login page or contact the IT Helpdesk.
-
-IT Helpdesk:
-Submit issues via the IT portal or call extension 1102 for assistance.

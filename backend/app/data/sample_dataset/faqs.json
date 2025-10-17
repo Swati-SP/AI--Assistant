@@ -1,0 +1,26 @@
+[
+  {
+    "question": "When will salary be credited?",
+    "answer": "Salaries are credited on the last working day of each month. If it falls on a holiday, processed prior working day."
+  },
+  {
+    "question": "How do I apply for leave?",
+    "answer": "Use the Employee Portal > Time & Attendance > Apply for Leave. Provide dates and reason; submit for manager approval."
+  },
+  {
+    "question": "How to raise an IT ticket?",
+    "answer": "Log into the IT ticketing portal or email it-helpdesk@companyxyz.com with a clear description and screenshots."
+  },
+  {
+    "question": "How long do reimbursements take?",
+    "answer": "Reimbursements typically process within 7\u201310 business days after approval."
+  },
+  {
+    "question": "Who can view salary details?",
+    "answer": "Salary details are restricted. Managers can view salaries of direct reports as needed; Finance has broader access."
+  },
+  {
+    "question": "What is the SLA for critical IT issues?",
+    "answer": "P1 critical issues are targeted to be resolved within 4 hours as per IT SOP."
+  }
+]
