@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Optional custom tweaks */
+body {
+  @apply bg-gray-50 text-gray-900;
+  font-family: 'Inter', sans-serif;
+}
+/* Smooth scrolling for the chat area */
+.chat-scroll {
+  scroll-behavior: smooth;
+}
+
+/* Optional: thinner scrollbar */
+.chat-scroll::-webkit-scrollbar { height: 8px; width: 8px; }
+.chat-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,.15); border-radius: 999px; }
+.chat-scroll::-webkit-scrollbar-track { background: transparent; }
