@@ -197,12 +197,64 @@ def _is_chitchat(query: str) -> bool:
     return False
 
 
+# ---- Context / Prompt builder ----
+def build_conversation_prompt(history: Optional[List[Dict[str, Any]]], retrieved: List[RetrievedChunk], user_query: str, max_history_turns: int = 6) -> str:
+    """
+    Combine system message + pruned history + numbered retrieved context + user question into a single prompt string.
+    """
+    # Prune and format history: keep only last max_history_turns turns
+    history = history or []
+    recent = history[-max_history_turns:] if history else []
+    history_lines = []
+    for turn in recent:
+        role = turn.get("role", "user")
+        text = turn.get("text", "").strip()
+        if not text:
+            continue
+        # Capitalize role for readability: "User:" / "Assistant:"
+        history_lines.append(f"{role.capitalize()}: {text}")
+
+    history_block = "\n".join(history_lines) if history_lines else "(no prior conversation)\n"
+
+    # Number retrieved chunks for easier citation and clarity
+    context_parts = []
+    for idx, c in enumerate(retrieved, start=1):
+        excerpt = (c.text or "").strip().replace("\n", " ")
+        if len(excerpt) > 800:
+            excerpt = excerpt[:797].rsplit(" ", 1)[0] + "..."
+        context_parts.append(f"[{idx}] {c.doc_id} :: {c.chunk_id}\n{excerpt}")
+
+    context_block = "\n\n".join(context_parts) if context_parts else "(no relevant documents retrieved)"
+
+    prompt = (
+        "You are a helpful, factual assistant. Use the conversation history and the provided document context to answer the user's question.\n\n"
+        "Guidelines:\n"
+        "- Provide a concise direct answer first (1–3 short sentences).\n"
+        "- If you use content from the context, include inline citation markers like [1], [2], etc.\n"
+        "- DO NOT repeat or paste full content from the retrieved documents. Only cite them by number.\n"
+        "- After the concise answer, you may add one short explanatory sentence, but do NOT include long excerpts.\n"
+        "- If the answer is not found in the documents or conversation, reply: 'I could not find the answer in the provided documents.'\n\n"
+        # inside build_conversation_prompt() Guidelines block, add:
+        "- If the user explicitly asks for a list (e.g. 'give 5 important points'), return a numbered or bulleted list only."
+        "- Provide the short answer first using bullets or numbered items if the user requested that format."
+
+        "Conversation so far:\n"
+        f"{history_block}\n\n"
+        "Relevant context (numbered):\n"
+        f"{context_block}\n\n"
+        f"User's new question: {user_query}\n\n"
+        "Assistant:"
+    )
+    return prompt
+
+
 # ---- Main route ----
 @router.post("/ask", response_model=AskResponse)
 async def api_ask(payload: AskRequest):
     try:
         q = payload.query
         top_k = payload.top_k or 3
+        history = payload.history or []
 
         if not q or not q.strip():
             return AskResponse(answer="", retrieved=[], debug={"error": "empty_query"})
@@ -228,7 +280,7 @@ async def api_ask(payload: AskRequest):
         except Exception as e:
             return AskResponse(answer=None, retrieved=[], debug={"error": "search_failed", "detail": str(e)})
 
-        retrieved = []
+        retrieved: List[RetrievedChunk] = []
         for r in raw_results:
             meta = r.get("meta", {}) if isinstance(r, dict) else {}
             retrieved.append(
@@ -240,13 +292,8 @@ async def api_ask(payload: AskRequest):
                 )
             )
 
-        combined_context = "\n\n".join([f"{c.doc_id}::{c.chunk_id}\n{c.text}" for c in retrieved])
-
-        prompt = (
-            "Use the following context to answer the user's question. "
-            "If the answer is not in the context, say: 'I could not find the answer in the provided documents.'\n\n"
-            f"Context:\n{combined_context}\n\nQuestion: {q}\nAnswer:"
-        )
+        # Build the contextual prompt using history + retrieved
+        prompt = build_conversation_prompt(history, retrieved, q)
 
         llm_debug: Dict[str, Any] = {}
         llm_answer = None
@@ -258,8 +305,21 @@ async def api_ask(payload: AskRequest):
             print(f"DEBUG: strict-context groq error: {llm_debug['groq_error']}")
             llm_answer = None
 
+        # --- Defensive cleanup: remove any 'Sources:' or long context echoes from model output ---
+        try:
+            if isinstance(llm_answer, str) and llm_answer.strip():
+                # strip any model-added Sources: section
+                llm_answer = re.split(r'\n{1,2}Sources:\s*\n', llm_answer, flags=re.IGNORECASE)[0].strip()
+                # If model echoed large amounts of context, keep only the first paragraph
+                if len(llm_answer) > 3000:
+                    llm_answer = llm_answer.split('\n\n', 1)[0].strip()
+        except Exception:
+            # don't fail the whole request if cleanup fails
+            pass
+
+        # Fallbacks (same as before) if LLM failed or no context
         if llm_answer is None:
-            if not retrieved or len(combined_context.strip()) < 50:
+            if not retrieved or len("\n\n".join([c.text for c in retrieved]).strip()) < 50:
                 try:
                     fallback_prompt = f"The user said: \"{q}\". Reply helpfully and conversationally."
                     llm_answer = call_groq_completion(fallback_prompt, system_message="You are a friendly conversational assistant.")
@@ -269,9 +329,30 @@ async def api_ask(payload: AskRequest):
                     print(f"DEBUG: fallback groq error: {llm_debug['fallback_error']}")
                     llm_answer = "(No relevant documents and Groq chat failed.)"
             else:
+                # show retrieved context if LLM failed but we have context
+                combined_context = "\n\n".join([f"{c.doc_id}::{c.chunk_id}\n{c.text}" for c in retrieved])
                 llm_answer = "(No LLM configured — showing retrieved context instead.)\n\n" + (combined_context or "(no context available)")
 
-        return AskResponse(answer=llm_answer, retrieved=retrieved, debug={"num_retrieved": len(retrieved), **llm_debug, **({"chitchat_error": chit_err} if chit_err else {})})
+        # Append deterministic Sources block so frontend can display exact sources
+        sources_lines = []
+        for idx, c in enumerate(retrieved, start=1):
+            excerpt = (c.text or "").strip().replace("\n", " ")
+            if len(excerpt) > 200:
+                excerpt = excerpt[:197].rsplit(" ", 1)[0] + "..."
+            sources_lines.append(f"[{idx}] {c.doc_id} :: {c.chunk_id}\n    {excerpt}")
+
+        sources_block = "Sources:\n" + "\n\n".join(sources_lines) if sources_lines else ""
+
+        if sources_block:
+            llm_answer_with_sources = f"{llm_answer}\n\n{sources_block}"
+        else:
+            llm_answer_with_sources = llm_answer
+
+        return AskResponse(
+            answer=llm_answer_with_sources,
+            retrieved=retrieved,
+            debug={"num_retrieved": len(retrieved), **llm_debug, **({"chitchat_error": chit_err} if chit_err else {})}
+        )
 
     except Exception as exc:
         traceback.print_exc()
