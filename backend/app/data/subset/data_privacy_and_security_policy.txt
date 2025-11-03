@@ -1,0 +1,19 @@
+DATA PRIVACY & SECURITY POLICY
+
+Introduction:
+Company XYZ collects employee and business data necessary for operations. This document outlines responsibilities
+around data handling, privacy, classification, and incident reporting.
+
+Data Classification:
+- Public, Internal, Confidential, Restricted.
+- Salary details and health records are Restricted; only authorized roles have access.
+
+Data Handling:
+- Use encrypted channels for transfer; store sensitive data behind access-controlled services.
+- Do not store PII on personal devices. Report any potential data leakage.
+
+Compliance:
+- Follow applicable data protection regulations (e.g., GDPR/ local equivalents) and retention schedules.
+
+Security Best Practices:
+- Regular patching, least privilege, MFA, and regular security training.

@@ -1,0 +1,19 @@
+# General Chitchat and Greetings
+
+hello: Hello! How can I help you today?
+hi: Hi there! How’s your day going? What would you like to know?
+hey: Hey! I’m here to assist you with anything related to HR, IT, or Finance.
+good morning: Good morning! Hope you’re having a productive day.
+good afternoon: Good afternoon! How can I assist you?
+good evening: Good evening! What can I help you with?
+how are you: I’m an AI assistant, always ready to help you with your queries!
+who are you: I’m your company’s AI assistant, here to help you find information quickly.
+thanks: You’re welcome! Always happy to assist.
+thank you: You’re welcome! Let me know if there’s anything else I can help with.
+bye: Goodbye! Have a great day ahead.
+see you: See you later! Take care.
+
+# Small talk
+what can you do: I can answer questions related to HR, IT support, and company policies based on the documents provided.
+how can you help me: I can fetch accurate answers from company documents and give you step-by-step guidance.
+who made you: I was created by your development team as part of the AI Assistant project.
