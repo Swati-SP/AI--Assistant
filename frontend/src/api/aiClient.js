@@ -1,50 +1,44 @@
 // src/api/aiClient.js
+import { getCurrentSession } from "./authApi";
 
-// ✅ Backend base URL only (no /api/ask here)
-const API_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
+const API_URL =
+  process.env.REACT_APP_API_URL ||
+  process.env.REACT_APP_API_BASE ||
+  "http://127.0.0.1:8000";
 
-/**
- * Ask a question to the backend RAG model.
- * @param {string} query - User's input question
- * @param {object} options - Optional config (e.g., timeout, history)
- * @param {Array} [options.history=[]] - Optional conversation history array
- * @returns {Promise<object>} - JSON { answer: "...", retrieved: [...], debug: {...} }
- */
-async function askQuestion(query, { timeout = 30000, history = [] } = {}) {
-  if (!query) throw new Error("Query text is required.");
+export async function askQuestion(query, history = []) {
+  if (!query) throw new Error("Query is required");
 
-  // Abort after timeout
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
+  // ✅ Get token correctly
+  const session = getCurrentSession();
+  const token = session?.accessToken || session?.token || "";
 
+  const res = await fetch(`${API_URL}/api/ask`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}), // ✅ correct token header
+    },
+    body: JSON.stringify({ query, history }),
+  });
+
+  const text = await res.text();
+  let data;
   try {
-    // ✅ Send both `query` and `history` to the backend
-    const response = await fetch(`${API_URL}/api/ask`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        query,
-        history, // 🧠 send conversation history for contextual chat
-      }),
-      signal: controller.signal,
-    });
-
-    clearTimeout(timer);
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => response.statusText);
-      throw new Error(`API ${response.status}: ${errorText}`);
-    }
-
-    // Parse backend JSON result
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    if (error.name === "AbortError") throw new Error("Request timed out");
-    throw error;
+    data = JSON.parse(text);
+  } catch {
+    data = text;
   }
+
+  if (!res.ok) {
+    throw new Error(
+      (data && typeof data === "object" && (data.detail || data.message)) ||
+        text ||
+        `HTTP ${res.status}`
+    );
+  }
+
+  return data; // { answer, retrieved, debug }
 }
 
-// Export both named and default for flexibility
-export { askQuestion };
 export default askQuestion;

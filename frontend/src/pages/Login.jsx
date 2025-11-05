@@ -1,7 +1,7 @@
 // src/pages/Login.jsx
 import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { login } from "../api/authApi";
+import { login, getCurrentSession } from "../api/authApi";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -14,10 +14,10 @@ export default function Login() {
   const [apiError, setApiError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  function validate() {
+  function validate(em, pw) {
     const e = {};
-    if (!/^\S+@\S+\.\S+$/.test(email)) e.email = "Enter a valid email";
-    if (password.length < 6) e.password = "Minimum 6 characters";
+    if (!/^\S+@\S+\.\S+$/.test(em)) e.email = "Enter a valid email";
+    if ((pw || "").length < 6) e.password = "Minimum 6 characters";
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -25,11 +25,25 @@ export default function Login() {
   async function handleSubmit(e) {
     e.preventDefault();
     setApiError("");
-    if (!validate()) return;
+
+    const em = email.trim();
+    const pw = password;
+
+    if (!validate(em, pw)) return;
+
     setSubmitting(true);
     try {
-      await login({ email, password });
-      navigate(from, { replace: true }); // ⬅ go back to intended page
+      await login({ email: em, password: pw });
+
+      // sanity check: session must exist with accessToken
+      const raw = localStorage.getItem("session_v1");
+      const sess = getCurrentSession();
+      console.log("session_v1 after login:", raw);
+      if (!sess?.accessToken) {
+        throw new Error("Login succeeded but session not saved. Check authApi.js setSession.");
+      }
+
+      navigate(from, { replace: true });
     } catch (err) {
       setApiError(err?.message || "Login failed");
     } finally {
@@ -66,7 +80,11 @@ export default function Login() {
         />
         {errors.password && <p className="text-xs text-red-600">{errors.password}</p>}
 
-        <button disabled={submitting} className="w-full rounded p-2 border disabled:opacity-60 hover:bg-gray-50 dark:hover:bg-gray-800">
+        <button
+          type="submit"
+          disabled={submitting}
+          className="w-full rounded p-2 border disabled:opacity-60 hover:bg-gray-50 dark:hover:bg-gray-800"
+        >
           {submitting ? "Checking..." : "Continue"}
         </button>
 

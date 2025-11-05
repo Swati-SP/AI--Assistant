@@ -1,4 +1,4 @@
-// src/App.js
+/// src/App.js
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 
@@ -49,8 +49,8 @@ function tokenExpMs() {
 }
 
 function isTokenValid() {
-  const exp = tokenExpMs();
-  return exp > Date.now();
+  const s = getAuthSession();
+  return !!s?.accessToken; // accept token without checking exp
 }
 
 /* ---------------- Route Guards ---------------- */
@@ -100,16 +100,7 @@ function ChatLayout() {
     else setStore(data);
   }, [userId]);
 
-  // auto logout on expiry
-  useEffect(() => {
-    const exp = tokenExpMs();
-    if (!exp) return;
-    const msLeft = exp - Date.now();
-    if (msLeft <= 0) return handleLogout();
-    const t = setTimeout(handleLogout, msLeft);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth?.accessToken]);
+  // (Removed) auto logout effect that depended on exp
 
   // sync between tabs
   useEffect(() => {
@@ -178,11 +169,6 @@ function ChatLayout() {
 
   const apiMode = localStorage.getItem("mockMode") === "true" ? "Mock" : "Real";
 
-  /* ------------------ Upload done handler ------------------
-     This receives the result object from UploadDocs:
-     { uploaded: [{ filename, size, id? }], summaries: [{ filename, summary }], summarizeError? }
-     It appends assistant messages for each summary (so they appear in chat).
-  ----------------------------------------------------------------*/
   const makeAssistantMsg = useCallback((content, sources = []) => ({
     role: "assistant",
     content,
@@ -209,10 +195,8 @@ function ChatLayout() {
       return;
     }
 
-    // Append a short header assistant message
     appendMessage(makeAssistantMsg(`Uploaded ${result.uploaded?.length || summaries.length} file(s). Showing summaries below:`));
 
-    // Append one assistant message per summary (filename + summary)
     summaries.forEach((s) => {
       const content = `**Summary — ${s.filename}**\n\n${s.summary}`;
       appendMessage(makeAssistantMsg(content, [{ title: s.filename }]));
@@ -246,7 +230,6 @@ function ChatLayout() {
             </div>
 
             <div className="flex items-center gap-3">
-              {/* pass onDone to UploadDocs so uploaded summaries are added to chat */}
               <UploadDocs onDone={handleUploadDone} />
               <ExportMenu messages={messages} />
               <button onClick={handleClearCurrent} disabled={loading} className="px-3 py-2 text-sm border rounded-lg">

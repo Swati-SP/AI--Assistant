@@ -2,53 +2,87 @@
 import { getCurrentSession, setSession, logout } from "./authApi";
 
 /**
- * Resolve API base URL
- * Supports both Vite (VITE_API_BASE) and CRA (REACT_APP_API_URL)
+ * Resolve API base URL (Vite + CRA) → ALWAYS `${BASE}${path}`
  */
-const base =
+const API_BASE =
   (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE) ||
   (typeof process !== "undefined" && process.env?.REACT_APP_API_URL) ||
   "http://127.0.0.1:8000";
 
 export function apiBase() {
-  return base.replace(/\/+$/, ""); // remove trailing slashes
+  // remove trailing slashes
+  return String(API_BASE).replace(/\/+$/, "");
+}
+
+function makeUrl(path = "") {
+  // ensure single slash between base and path
+  const p = String(path).startsWith("/") ? path : `/${path}`;
+  return `${apiBase()}${p}`;
 }
 
 /**
- * Create Authorization header if token exists
+ * Authorization header from current session
+ * – tolerate either `accessToken` or `token`
  */
 function authHeader() {
   const session = getCurrentSession();
-  const token = session?.accessToken;
+  const token = session?.accessToken || session?.token || null;
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 /**
- * Safe fetch wrapper (handles JSON parsing)
+ * Safe response handler (works for JSON or text)
  */
-async function doFetch(url, options = {}, parseJson = true) {
-  const res = await fetch(url, options);
-  let data = null;
-
-  if (parseJson) {
-    try {
-      data = await res.json();
-    } catch {
-      data = null;
-    }
+async function handle(res) {
+  const text = await res.text(); // read safely even if not JSON
+  let data;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text || null;
   }
 
+  if (!res.ok) {
+    const msg =
+      (data && typeof data === "object" && (data.detail || data.message)) ||
+      (typeof data === "string" && data) ||
+      `HTTP Error ${res.status}`;
+    const err = new Error(msg);
+    err.status = res.status;
+    err.data = data;
+    throw err;
+  }
+
+  return data;
+}
+
+/**
+ * Low-level fetch wrapper – returns raw Response (no throwing)
+ */
+async function doFetch(url, options = {}) {
+  const res = await fetch(url, options);
+  // We DON'T throw here; callers decide. But we still parse a best-effort body.
+  const text = await res.text().catch(() => null);
+  let data = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
+  }
   return { res, data };
 }
 
 /**
- * Try to refresh the access token using stored refresh token
- * Returns true if refresh succeeded and session updated
+ * Token refresh (single-flight)
+ * NOTE: your OpenAPI didn’t list /api/auth/refresh; using /auth/refresh instead.
+ * If your backend has no refresh route, this will gracefully fail and trigger logout.
  */
 let refreshing = false;
 
 async function tryRefresh() {
-  if (refreshing) return false; // prevent simultaneous refresh calls
+  if (refreshing) return false;
   refreshing = true;
 
   const session = getCurrentSession();
@@ -59,7 +93,7 @@ async function tryRefresh() {
   }
 
   try {
-    const { res, data } = await doFetch(`${apiBase()}/api/auth/refresh`, {
+    const { res, data } = await doFetch(makeUrl("/auth/refresh"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken }),
@@ -68,15 +102,20 @@ async function tryRefresh() {
 
     refreshing = false;
 
-    if (!res.ok || !data?.accessToken) return false;
+    // Accept either {accessToken} or {token}
+    const newAccess = data && typeof data === "object"
+      ? data.accessToken || data.token
+      : null;
+
+    if (!res.ok || !newAccess) return false;
 
     const newSession = {
       ...session,
-      accessToken: data.accessToken,
-      refreshToken: data.refreshToken || session.refreshToken,
-      user: data.user || session.user,
+      accessToken: newAccess,
+      refreshToken: (data && data.refreshToken) || session.refreshToken,
+      user: (data && data.user) || session.user,
+      token: undefined, // normalize to accessToken
     };
-
     setSession(newSession);
     return true;
   } catch {
@@ -86,22 +125,25 @@ async function tryRefresh() {
 }
 
 /**
- * Unified POST request wrapper
- *  - Adds Authorization header automatically
- *  - Handles token refresh on 401
+ * POST helper
+ * - Builds URL as `${API_BASE}${path}`
+ * - Adds auth header
+ * - Refreshes on 401 once (if refresh route exists)
+ * - Uses safe handle() for robust error text/JSON
  */
 export async function post(path, body, opts = {}) {
-  const url = path.startsWith("http") ? path : `${apiBase()}${path}`;
-  let headers = {
+  const url = path.startsWith("http") ? path : makeUrl(path);
+
+  const baseHeaders = {
     "Content-Type": "application/json",
     ...authHeader(),
     ...(opts.headers || {}),
   };
 
-  // First request attempt
-  let { res, data } = await doFetch(url, {
+  // First attempt
+  let res = await fetch(url, {
     method: "POST",
-    headers,
+    headers: baseHeaders,
     body: JSON.stringify(body ?? {}),
     credentials: "include",
   });
@@ -110,61 +152,34 @@ export async function post(path, body, opts = {}) {
   if (res.status === 401) {
     const refreshed = await tryRefresh();
     if (refreshed) {
-      headers = { ...headers, ...authHeader() };
-      ({ res, data } = await doFetch(url, {
+      const retryHeaders = { ...baseHeaders, ...authHeader() };
+      res = await fetch(url, {
         method: "POST",
-        headers,
+        headers: retryHeaders,
         body: JSON.stringify(body ?? {}),
         credentials: "include",
-      }));
+      });
     } else {
       await logout();
-      throw new Error("Session expired. Please log in again.");
+      // Let handle() convert any body to a readable error
     }
   }
 
-  // If still not OK → throw
-  if (!res.ok) {
-    const msg =
-      data?.detail ||
-      data?.message ||
-      (typeof data === "string" ? data : null) ||
-      `HTTP Error ${res.status}`;
-    const err = new Error(msg);
-    err.status = res.status;
-    err.data = data;
-    throw err;
-  }
-
-  return data;
+  return handle(res);
 }
 
 /**
- * Simple GET helper (optional)
+ * GET helper
  */
 export async function get(path, opts = {}) {
-  const url = path.startsWith("http") ? path : `${apiBase()}${path}`;
-  const headers = {
-    ...authHeader(),
-    ...(opts.headers || {}),
-  };
-  const { res, data } = await doFetch(url, {
+  const url = path.startsWith("http") ? path : makeUrl(path);
+  const headers = { ...authHeader(), ...(opts.headers || {}) };
+
+  const res = await fetch(url, {
     method: "GET",
     headers,
     credentials: "include",
   });
 
-  if (!res.ok) {
-    const msg =
-      data?.detail ||
-      data?.message ||
-      (typeof data === "string" ? data : null) ||
-      `HTTP Error ${res.status}`;
-    const err = new Error(msg);
-    err.status = res.status;
-    err.data = data;
-    throw err;
-  }
-
-  return data;
+  return handle(res);
 }

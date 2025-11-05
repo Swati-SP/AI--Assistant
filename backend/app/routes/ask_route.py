@@ -1,5 +1,5 @@
 # backend/app/routes/ask_route.py
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Optional, Any, Dict
 import os
@@ -7,6 +7,17 @@ import traceback
 import requests
 import re
 import json
+from datetime import datetime
+
+# --- Optional: only used if you enabled Mongo + auth files I gave you ---
+# If you haven't added these yet, keep the imports; they won't break as long as files exist.
+try:
+    from app.db.mongo import chats_col
+    from app.deps import get_current_user
+except Exception:
+    chats_col = None
+    def get_current_user(*args, **kwargs):
+        return None
 
 router = APIRouter()
 
@@ -83,7 +94,6 @@ def call_groq_completion(prompt: str, system_message: Optional[str] = None, time
         raise RuntimeError("GROQ_API_KEY not set in environment. Please set it and restart the server.")
 
     # Choose endpoint: if user already included full path use as-is; otherwise use /responses by default
-    # Accept either base ending with /responses or /chat/completions
     preferred_path = "/responses"
     if GROQ_API_BASE.endswith("/responses") or GROQ_API_BASE.endswith("/chat/completions"):
         url = GROQ_API_BASE
@@ -101,14 +111,13 @@ def call_groq_completion(prompt: str, system_message: Optional[str] = None, time
 
     # If calling /responses endpoint, it expects {"model": ..., "input": "..."}
     if url.endswith("/responses"):
-        # IMPORTANT: Groq Responses API uses `max_output_tokens` (not `max_tokens`).
+        # Groq Responses API uses `max_output_tokens`
         payload = {
             "model": GROQ_MODEL,
             "input": prompt,
             "max_output_tokens": 512,
             "temperature": 0.2,
         }
-    # If calling chat/completions style endpoint, use messages array
     elif url.endswith("/chat/completions"):
         payload = {
             "model": GROQ_MODEL,
@@ -120,13 +129,10 @@ def call_groq_completion(prompt: str, system_message: Optional[str] = None, time
             "temperature": 0.2,
         }
     else:
-        # fallback to responses-style
         payload = {"model": GROQ_MODEL, "input": prompt, "max_output_tokens": 512, "temperature": 0.2}
 
-    # Send request and include full response body when raising for easier debugging
     resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
     if resp.status_code != 200:
-        # print response text for debugging and raise detailed error
         err_text = resp.text
         print(f"DEBUG: Groq non-200 status: {resp.status_code}, body: {err_text}")
         raise RuntimeError(f"Groq API error {resp.status_code}: {err_text}")
@@ -135,13 +141,10 @@ def call_groq_completion(prompt: str, system_message: Optional[str] = None, time
 
     # 1) /responses style: look for top-level "output" list OR "output_text"
     if isinstance(data, dict):
-        # responses endpoint often returns 'output' as a list
         if "output" in data and isinstance(data["output"], list) and data["output"]:
-            # join textual pieces
             parts = []
             for out in data["output"]:
                 if isinstance(out, dict):
-                    # content may be list of blocks
                     content = out.get("content") or out.get("text")
                     if isinstance(content, list):
                         for c in content:
@@ -158,7 +161,7 @@ def call_groq_completion(prompt: str, system_message: Optional[str] = None, time
         if "output_text" in data:
             return str(data["output_text"]).strip()
 
-    # 2) chat/completions style: choices -> first -> message/content
+    # 2) chat/completions style
     try:
         if isinstance(data, dict) and "choices" in data and len(data["choices"]) > 0:
             choice = data["choices"][0]
@@ -168,7 +171,7 @@ def call_groq_completion(prompt: str, system_message: Optional[str] = None, time
     except Exception:
         pass
 
-    # 3) older completions: choices[0].text
+    # 3) older completions
     try:
         if isinstance(data, dict) and "choices" in data and data["choices"]:
             c0 = data["choices"][0]
@@ -211,7 +214,6 @@ def build_conversation_prompt(history: Optional[List[Dict[str, Any]]], retrieved
         text = turn.get("text", "").strip()
         if not text:
             continue
-        # Capitalize role for readability: "User:" / "Assistant:"
         history_lines.append(f"{role.capitalize()}: {text}")
 
     history_block = "\n".join(history_lines) if history_lines else "(no prior conversation)\n"
@@ -233,11 +235,9 @@ def build_conversation_prompt(history: Optional[List[Dict[str, Any]]], retrieved
         "- If you use content from the context, include inline citation markers like [1], [2], etc.\n"
         "- DO NOT repeat or paste full content from the retrieved documents. Only cite them by number.\n"
         "- After the concise answer, you may add one short explanatory sentence, but do NOT include long excerpts.\n"
-        "- If the answer is not found in the documents or conversation, reply: 'I could not find the answer in the provided documents.'\n\n"
-        # inside build_conversation_prompt() Guidelines block, add:
-        "- If the user explicitly asks for a list (e.g. 'give 5 important points'), return a numbered or bulleted list only."
-        "- Provide the short answer first using bullets or numbered items if the user requested that format."
-
+        "- If the answer is not found in the documents or conversation, reply: 'I could not find the answer in the provided documents.'\n"
+        "- If the user explicitly asks for a list (e.g. 'give 5 important points'), return a numbered or bulleted list only.\n"
+        "- Provide the short answer first using bullets or numbered items if the user requested that format.\n\n"
         "Conversation so far:\n"
         f"{history_block}\n\n"
         "Relevant context (numbered):\n"
@@ -250,7 +250,7 @@ def build_conversation_prompt(history: Optional[List[Dict[str, Any]]], retrieved
 
 # ---- Main route ----
 @router.post("/ask", response_model=AskResponse)
-async def api_ask(payload: AskRequest):
+async def api_ask(payload: AskRequest, user=Depends(get_current_user)):
     try:
         q = payload.query
         top_k = payload.top_k or 3
@@ -262,8 +262,22 @@ async def api_ask(payload: AskRequest):
         chit_err = None
         if _is_chitchat(q):
             try:
-                open_prompt = f"The user said: \"{q}\". Reply briefly and politely as a friendly assistant."
+                open_prompt = f'The user said: "{q}". Reply briefly and politely as a friendly assistant.'
                 answer = call_groq_completion(open_prompt, system_message="You are a friendly conversational assistant.")
+                # Save chit-chat too (optional)
+                try:
+                    if user and chats_col:
+                        chats_col.insert_one({
+                            "user_id": user.get("user_id"),
+                            "email": user.get("email"),
+                            "question": q,
+                            "answer": answer,
+                            "retrieved": [],
+                            "created_at": datetime.utcnow(),
+                            "kind": "chitchat"
+                        })
+                except Exception:
+                    pass
                 return AskResponse(answer=answer, retrieved=[], debug={"provider": "groq", "chitchat": True})
             except Exception as e:
                 chit_err = str(e)
@@ -292,13 +306,21 @@ async def api_ask(payload: AskRequest):
                 )
             )
 
+        # (Optional) light filtering to reduce noise, without changing core behavior
+        if len(retrieved) > 0:
+            retrieved = sorted(retrieved, key=lambda x: x.score, reverse=True)[:top_k]
+
         # Build the contextual prompt using history + retrieved
         prompt = build_conversation_prompt(history, retrieved, q)
 
         llm_debug: Dict[str, Any] = {}
         llm_answer = None
         try:
-            llm_answer = call_groq_completion(prompt)
+            system_msg = (
+                "You are a concise assistant. ALWAYS keep answers brief and structured. "
+                "Use citations like [1], [2] when drawing from context."
+            )
+            llm_answer = call_groq_completion(prompt, system_message=system_msg)
             llm_debug["provider"] = "groq"
         except Exception as e:
             llm_debug["groq_error"] = str(e)
@@ -308,20 +330,17 @@ async def api_ask(payload: AskRequest):
         # --- Defensive cleanup: remove any 'Sources:' or long context echoes from model output ---
         try:
             if isinstance(llm_answer, str) and llm_answer.strip():
-                # strip any model-added Sources: section
                 llm_answer = re.split(r'\n{1,2}Sources:\s*\n', llm_answer, flags=re.IGNORECASE)[0].strip()
-                # If model echoed large amounts of context, keep only the first paragraph
                 if len(llm_answer) > 3000:
                     llm_answer = llm_answer.split('\n\n', 1)[0].strip()
         except Exception:
-            # don't fail the whole request if cleanup fails
             pass
 
-        # Fallbacks (same as before) if LLM failed or no context
+        # Fallbacks if LLM failed or no context
         if llm_answer is None:
             if not retrieved or len("\n\n".join([c.text for c in retrieved]).strip()) < 50:
                 try:
-                    fallback_prompt = f"The user said: \"{q}\". Reply helpfully and conversationally."
+                    fallback_prompt = f'The user said: "{q}". Reply helpfully and conversationally.'
                     llm_answer = call_groq_completion(fallback_prompt, system_message="You are a friendly conversational assistant.")
                     llm_debug["provider"] = "groq_fallback"
                 except Exception as e:
@@ -329,7 +348,6 @@ async def api_ask(payload: AskRequest):
                     print(f"DEBUG: fallback groq error: {llm_debug['fallback_error']}")
                     llm_answer = "(No relevant documents and Groq chat failed.)"
             else:
-                # show retrieved context if LLM failed but we have context
                 combined_context = "\n\n".join([f"{c.doc_id}::{c.chunk_id}\n{c.text}" for c in retrieved])
                 llm_answer = "(No LLM configured — showing retrieved context instead.)\n\n" + (combined_context or "(no context available)")
 
@@ -342,11 +360,22 @@ async def api_ask(payload: AskRequest):
             sources_lines.append(f"[{idx}] {c.doc_id} :: {c.chunk_id}\n    {excerpt}")
 
         sources_block = "Sources:\n" + "\n\n".join(sources_lines) if sources_lines else ""
+        llm_answer_with_sources = f"{llm_answer}\n\n{sources_block}" if sources_block else llm_answer
 
-        if sources_block:
-            llm_answer_with_sources = f"{llm_answer}\n\n{sources_block}"
-        else:
-            llm_answer_with_sources = llm_answer
+        # --- Save Q/A for logged-in users (best-effort, never blocks) ---
+        try:
+            if user and chats_col:
+                chats_col.insert_one({
+                    "user_id": user.get("user_id"),
+                    "email": user.get("email"),
+                    "question": q,
+                    "answer": llm_answer_with_sources,
+                    "retrieved": [c.dict() for c in retrieved],
+                    "created_at": datetime.utcnow(),
+                    "kind": "qa"
+                })
+        except Exception:
+            pass
 
         return AskResponse(
             answer=llm_answer_with_sources,
